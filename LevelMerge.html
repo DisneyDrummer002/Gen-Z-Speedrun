@@ -333,12 +333,6 @@ function drawTitle(){
   ctx.fillStyle=`rgba(0,255,255,${alpha*0.3})`; ctx.fillRect(60,60,680,200);
   // Tung Tung preview
   drawTungTung(680,300,Math.sin(animTimer*.05)*0.3,'happy');
-  // start btn
-  showOverlay(`
-    <div style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);text-align:center;">
-      <button class="btn btn-green" onclick="startL3()" style="animation:pulse 0.8s infinite;">YES BRO — LEVEL THREE</button>
-    </div>
-  `);
 }
 
 function startL3(){
@@ -1523,7 +1517,7 @@ function playBGM(track){
 // =============================================
 // START
 // =============================================
-showOverlay(''); // clear
+showOverlay(`<div style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);text-align:center;"><button class="btn btn-green" onclick="startL3()" style="animation:pulse 0.8s infinite;">YES BRO — LEVEL THREE</button></div>`);
 gameLoop(0);
 </script>
 </body>
