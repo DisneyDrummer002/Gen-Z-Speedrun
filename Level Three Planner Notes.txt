@@ -1,0 +1,32 @@
+Things to include:
+Triple T
+Pick between 67 and 41. If you pick 41, GAME OVER. The game then procedes to say asdfghjkl (which I'll replace with something rude).
+Hacky sack challenge to increase aura (as it approaches you, you tap whatever key pops up next to it to hit it back; an NPC hits it back (with 90% accuracy).) COMBINE WITH TRIPLE TTT More sacks = more aura IF there is a girl walking past. people walk by you some are guys some are girls. If it's a girl you gain aura, if it's a guy you lose aura You auto advance when you get 10
+Part Two:
+You go to a restauraunt, and your watch says 7:59, the sign says closes at 8:00. TACO BELL. You get to order whatever you want, but you have to order at least 10 items to win. XD Rage bating. Tell them player you want max rage bating. Lava chicken plays at background in the store. Each rage bate brings the aura up. If you rage bait them more than 11 times, 3-4 chefs come at you with knives and you enter into a fight scene. Your weapon is TTT's baseball bat. You have to beat up all the chefs. Health bar, 25% knock off per hit from the bat. Once 
+Part Three:
+A girl asks you for a ride, you have three different ways to say yes (non shaulant, ego, innocent). You're driving in a motor cycle to Ohio, and you have to avoid random Gen Z objects, like skibidi toilets, TikTok Adds, random teenagers on their phones. Similar style to sonic dash. Sonic randomly appears half way through and says "You gotta go fast!" She wants to go to ohio. Thick of It plays on the motorcycle radio. Dodge I Show Speed's crowd during a live stream. If you crash, you cut your aura in half, and then you restart part three. If you successfully dodge each thing, then you gain 1 aura each dodge.
+
+
+
+
+
+
+Prompt:
+
+Here are two .html files for different levels of a game I am making. Here are the instructions for how to make the thrid level. Please follow the style of the first two. Level Three is divided into three parts.
+
+Part One:
+-you get to select your path between 67 and 41. If you select 41, GAME OVER, with words beneath "Game Over" saying "You Stink!". If you pick 67, you get to go on.
+-Then you arrive at school. You are hacky sacking (and sagging) in the hallways. You are hacky sacking with Tung Tung TUng (the gen z meme). Groups of people walk past you as you're walking. If it's a group of girls you gain lots of aura by sacking well. If it's a group of guys you don't gain or lose any aura no matter how well you do. You have to get 10 sacks in a row. You sack correctly by hitting whatever key on the keyboard pops up when the sack approaches you. The key will show above your icon's head. Tung Tung Tung will have a 90% accuracy rate with his sacking. Once you get 10 sacks in a row, you advance to part two. First, do an animation where you high five Tung Tung Tung.
+
+Part Two:
+-You go to a taco bell, and a sign says closing in 1 minute.
+-A screen tells you that your mission is to max rage bait.
+-You start outside, then have to walk in.
+-Once you get in, you talk to the people and order.
+-A sign inside says "Welcome to Taco Bell [new line] please don't rage bait us by ordering 10+ items one minute before closing"
+-There is a 60 second timer that counts down. If they haven't ordered 10 meals by the time the timer runs out, or if they don't order enough, GAME OVER. Then they have to restart outside of taco bell.
+-You have to order 10 meals to rage bait them.
+-You can chose between different meals and click on them.
+-The meals have to be Baja Blast, Dorito Taco, Ranch Burrito, BigBackBigMac
