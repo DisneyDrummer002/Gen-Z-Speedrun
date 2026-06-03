@@ -1,1 +1,1530 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Gen Z Speedrun pt.3 - by Dwayne The Rock</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap');
+*{margin:0;padding:0;box-sizing:border-box;}
+body{background:#000;font-family:'Press Start 2P',monospace;overflow:hidden;width:100vw;height:100vh;display:flex;align-items:center;justify-content:center;}
+#game{width:800px;height:500px;position:relative;overflow:hidden;background:#000;border:3px solid #333;image-rendering:pixelated;}
+canvas{display:block;image-rendering:pixelated;}
+#ui{position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:50;}
+#aura-display{position:absolute;top:8px;left:8px;font-size:7px;color:#FFD700;background:rgba(0,0,0,0.85);padding:6px 8px;border:2px solid #FFD700;z-index:100;pointer-events:none;line-height:1.6;}
+#aura-change{position:absolute;top:40px;left:8px;font-size:7px;font-weight:bold;z-index:100;pointer-events:none;opacity:0;transition:opacity 0.5s;}
+#health-display{position:absolute;top:8px;right:8px;font-size:6px;color:#ff4444;background:rgba(0,0,0,0.85);padding:6px 8px;border:2px solid #ff4444;z-index:100;pointer-events:none;display:none;line-height:1.6;}
+#level-banner{position:absolute;top:8px;left:50%;transform:translateX(-50%);font-size:6px;color:#00ffff;background:rgba(0,0,0,0.85);padding:5px 10px;border:2px solid #00ffff;z-index:100;pointer-events:none;white-space:nowrap;display:none;}
+#timer-display{position:absolute;top:8px;right:8px;font-size:9px;color:#ff4444;background:rgba(0,0,0,0.85);padding:5px 10px;border:2px solid #ff4444;z-index:100;pointer-events:none;display:none;}
+#controls-hint{position:absolute;bottom:8px;left:50%;transform:translateX(-50%);font-size:5px;color:#888;background:rgba(0,0,0,0.75);padding:4px 10px;border:1px solid #444;z-index:100;pointer-events:none;white-space:nowrap;display:none;}
+.btn{font-family:'Press Start 2P',monospace;cursor:pointer;border:3px solid;padding:10px 18px;font-size:8px;letter-spacing:1px;image-rendering:pixelated;transition:transform 0.1s,filter 0.1s;}
+.btn:hover{transform:scale(1.05);filter:brightness(1.3);}
+.btn:active{transform:scale(0.97);}
+.btn-green{background:#003300;color:#00FF00;border-color:#00FF00;}
+.btn-red{background:#330000;color:#FF4444;border-color:#FF4444;}
+.btn-yellow{background:#332200;color:#FFD700;border-color:#FFD700;}
+.btn-white{background:#111;color:#fff;border-color:#fff;}
+.btn-blue{background:#000033;color:#4444FF;border-color:#4444FF;}
+.btn-cyan{background:#003333;color:#00FFFF;border-color:#00FFFF;}
+.btn-purple{background:#1a0033;color:#cc88ff;border-color:#cc88ff;}
+.btn-orange{background:#331100;color:#ff8800;border-color:#ff8800;}
+.textbox{background:rgba(0,0,0,0.93);border:3px solid #FFD700;padding:12px 16px;font-size:7px;color:#FFD700;line-height:1.9;position:absolute;bottom:20px;left:50%;transform:translateX(-50%);width:92%;z-index:50;min-height:50px;}
+.textbox .speaker{color:#FF9900;font-size:6px;margin-bottom:6px;}
+.choice-btn{display:block;width:100%;text-align:left;margin:5px 0;font-family:'Press Start 2P',monospace;font-size:6px;cursor:pointer;background:#001100;color:#00FF00;border:2px solid #00FF00;padding:8px 10px;pointer-events:all;}
+.choice-btn:hover{background:#003300;filter:brightness(1.2);}
+@keyframes redflash{0%,100%{opacity:1;}50%{opacity:0;}}
+@keyframes pulse{0%,100%{opacity:1;}50%{opacity:0.4;}}
+</style>
+</head>
+<body>
+<div id="game">
+  <div id="ui">
+    <div id="aura-display">⚡ AURA: <span id="aura-val">0</span></div>
+    <div id="aura-change"></div>
+    <div id="health-display">❤️ HP: <span id="hp-val">4</span>/4</div>
+    <div id="level-banner"></div>
+    <div id="timer-display"></div>
+    <div id="controls-hint"></div>
+  </div>
+  <canvas id="scene" width="800" height="500"></canvas>
+  <div id="overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;pointer-events:none;z-index:60;"></div>
+</div>
 
+<script>
+// =============================================
+// GEN Z SPEEDRUN PT.3 — COMBINED ENGINE
+// =============================================
+const canvas = document.getElementById('scene');
+const ctx = canvas.getContext('2d');
+const overlay = document.getElementById('overlay');
+const W = 800, H = 500;
+
+// Persistent aura (carries across all levels)
+let aura = 1800; // Starting aura from end of Level 2
+let hp = 4;
+let keys = {};
+let animTimer = 0;
+let gameState = 'title';
+let frameId = null;
+let particles = [];
+
+// Player object
+const P = {x:80, y:320, w:28, h:40, vx:0, vy:0, facing:1, frame:0, frameTimer:0};
+
+// =============================================
+// CORE UTILS
+// =============================================
+function updateAura(delta, label){
+  aura = Math.max(0, aura + delta);
+  document.getElementById('aura-val').textContent = aura;
+  const el = document.getElementById('aura-change');
+  el.textContent = (delta>0?'+':'')+delta+' AURA'+(label?' ('+label+')':'');
+  el.style.color = delta>0?'#00FF00':'#FF4444';
+  el.style.opacity = 1;
+  setTimeout(()=>el.style.opacity=0, 1800);
+}
+
+function setHP(v){ hp=Math.max(0,v); document.getElementById('hp-val').textContent=hp; }
+
+function clearOverlay(){ overlay.innerHTML=''; overlay.style.pointerEvents='none'; }
+
+function showOverlay(html, clickable=true){
+  overlay.innerHTML=html;
+  overlay.style.pointerEvents=clickable?'all':'none';
+}
+
+function px(n){ return Math.round(n); }
+
+function drawText(text,x,y,size=7,color='#fff',align='left'){
+  ctx.save();
+  ctx.font=`${size}px 'Press Start 2P'`;
+  ctx.fillStyle=color;
+  ctx.textAlign=align;
+  ctx.fillText(text,px(x),px(y));
+  ctx.restore();
+}
+
+function drawPixelRect(x,y,w,h,color){
+  ctx.fillStyle=color; ctx.fillRect(px(x),px(y),px(w),px(h));
+}
+
+function showLevelBanner(text){
+  const el=document.getElementById('level-banner');
+  el.textContent=text; el.style.display='block';
+}
+function hideLevelBanner(){ document.getElementById('level-banner').style.display='none'; }
+function showControlsHint(text){ const el=document.getElementById('controls-hint'); el.textContent=text; el.style.display='block'; }
+function hideControlsHint(){ document.getElementById('controls-hint').style.display='none'; }
+
+function showTimer(show){ document.getElementById('timer-display').style.display=show?'block':'none'; }
+function setTimerText(t){ document.getElementById('timer-display').textContent=t; }
+
+function spawnParticle(x,y,color='#FFD700'){
+  for(let i=0;i<5;i++){
+    const angle=Math.random()*Math.PI*2, spd=2+Math.random()*4;
+    particles.push({x,y,vx:Math.cos(angle)*spd,vy:Math.sin(angle)*spd,life:20,maxLife:20,color});
+  }
+}
+function updateParticles(){ particles=particles.filter(p=>{p.x+=p.vx;p.y+=p.vy;p.vy+=0.3;p.life--;return p.life>0;}); }
+function drawParticles(){ particles.forEach(p=>{ctx.globalAlpha=p.life/p.maxLife;ctx.fillStyle=p.color;ctx.fillRect(px(p.x),px(p.y),3,3);}); ctx.globalAlpha=1; }
+
+// =============================================
+// SHARED DRAW FUNCTIONS
+// =============================================
+function drawPixelChar(x,y,color1='#ffcc99',color2='#4444ff',facing=1,frame=0,dead=false,sunglasses=false){
+  const f=facing<0?-1:1;
+  ctx.save(); ctx.translate(px(x+14),px(y)); ctx.scale(f,1);
+  if(dead){ctx.translate(14,20);ctx.rotate(Math.PI/2);ctx.translate(-14,-20);}
+  drawPixelRect(-14,38,28,4,'rgba(0,0,0,0.3)');
+  const legL=frame%2===0?0:3, legR=frame%2===0?3:0;
+  drawPixelRect(-7,28+legL,7,14,color2); drawPixelRect(0,28+legR,7,14,color2);
+  drawPixelRect(-8,40+legL,9,4,'#222'); drawPixelRect(0,40+legR,9,4,'#222');
+  drawPixelRect(-10,10,20,20,color2);
+  const armL=frame%2===0?0:2, armR=frame%2===0?2:0;
+  drawPixelRect(-15,12+armL,6,16,'#cc9966'); drawPixelRect(9,12+armR,6,16,'#cc9966');
+  drawPixelRect(-8,-2,16,14,color1);
+  drawPixelRect(-5,2,3,3,'#222'); drawPixelRect(2,2,3,3,'#222');
+  if(sunglasses){drawPixelRect(-7,1,6,4,'#00ccff');drawPixelRect(1,1,6,4,'#00ccff');drawPixelRect(-1,1,2,4,'#006699');}
+  drawPixelRect(-3,8,6,2,'#cc6666');
+  ctx.restore();
+}
+
+function drawGround(color='#333',lineColor='#555'){
+  ctx.fillStyle=color; ctx.fillRect(0,380,W,120);
+  ctx.strokeStyle=lineColor; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=40){ctx.beginPath();ctx.moveTo(x,380);ctx.lineTo(x+20,500);ctx.stroke();}
+  for(let y=380;y<500;y+=20){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+// Tung Tung Tung sprite (long-armed meme figure)
+function drawTungTung(x,y,armAngle=0,face='normal'){
+  ctx.save(); ctx.translate(px(x),px(y));
+  // body
+  ctx.fillStyle='#8B4513'; ctx.fillRect(-10,0,20,28);
+  // head - big
+  ctx.fillStyle='#cc9966'; ctx.fillRect(-14,-20,28,22);
+  // eyes - wide
+  ctx.fillStyle='#fff'; ctx.fillRect(-11,-16,8,8); ctx.fillRect(3,-16,8,8);
+  ctx.fillStyle='#000'; ctx.fillRect(-9,-14,4,4); ctx.fillRect(5,-14,4,4);
+  if(face==='happy'){ ctx.fillStyle='#cc4444'; ctx.fillRect(-6,-4,12,4); }
+  else if(face==='scared'){ ctx.fillStyle='#000'; ctx.fillRect(-4,-4,8,6); }
+  else { ctx.fillStyle='#cc4444'; ctx.fillRect(-4,-4,8,3); }
+  // very long arms (tung tung thing)
+  ctx.strokeStyle='#cc9966'; ctx.lineWidth=6;
+  ctx.save(); ctx.rotate(armAngle);
+  ctx.beginPath(); ctx.moveTo(-10,6); ctx.lineTo(-55,24); ctx.stroke();
+  ctx.restore();
+  ctx.save(); ctx.rotate(-armAngle);
+  ctx.beginPath(); ctx.moveTo(10,6); ctx.lineTo(55,24); ctx.stroke();
+  ctx.restore();
+  // legs
+  ctx.fillStyle='#5C3310'; ctx.fillRect(-10,28,9,18); ctx.fillRect(1,28,9,18);
+  ctx.restore();
+}
+
+// Hacky sack ball
+function drawSack(x,y){
+  ctx.fillStyle='#228833'; ctx.beginPath(); ctx.arc(px(x),px(y),7,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#33aa44'; ctx.beginPath(); ctx.arc(px(x-2),px(y-2),3,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#115522'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(px(x-7),px(y)); ctx.lineTo(px(x+7),px(y)); ctx.stroke();
+}
+
+// Chef sprite
+function drawChef(x,y,hp,dead=false,anim=0){
+  ctx.save(); ctx.translate(px(x),px(y));
+  if(dead){ctx.rotate(Math.PI/2);ctx.translate(-14,10);}
+  else { const bob=Math.sin(anim*0.15)*2; ctx.translate(0,bob); }
+  // chef hat
+  ctx.fillStyle='#fff'; ctx.fillRect(-10,-38,20,8); ctx.fillRect(-7,-58,14,22);
+  // face
+  ctx.fillStyle='#ffcc99'; ctx.fillRect(-9,-30,18,18);
+  ctx.fillStyle='#333'; ctx.fillRect(-6,-26,4,4); ctx.fillRect(2,-26,4,4);
+  ctx.fillStyle='#cc4444'; ctx.fillRect(-4,-18,8,3);
+  // angry brow
+  ctx.fillStyle='#333'; ctx.fillRect(-7,-28,5,2); ctx.fillRect(2,-28,5,2);
+  // chef shirt
+  ctx.fillStyle='#fff'; ctx.fillRect(-11,-12,22,28);
+  ctx.fillStyle='#eee';
+  for(let i=0;i<3;i++) ctx.fillRect(-2,-8+i*8,4,4);
+  // arms
+  ctx.fillStyle='#fff'; ctx.fillRect(-18,-8,8,20); ctx.fillRect(10,-8,8,20);
+  // knife!
+  ctx.fillStyle='#aaa'; ctx.fillRect(18,-12,4,24);
+  ctx.fillStyle='#888'; ctx.fillRect(17,-14,6,6);
+  ctx.fillStyle='#8B4513'; ctx.fillRect(17,-4,6,8);
+  // legs
+  ctx.fillStyle='#333'; ctx.fillRect(-10,16,9,18); ctx.fillRect(1,16,9,18);
+  // hp dots
+  if(!dead){
+    for(let i=0;i<4;i++){
+      ctx.fillStyle=i<hp?'#ff4444':'#333';
+      ctx.fillRect(-14+i*8,-44,6,5);
+    }
+  }
+  ctx.restore();
+}
+
+// Motorcycle sprite
+function drawMotorcycle(x,y,lean=0){
+  ctx.save(); ctx.translate(px(x),px(y)); ctx.rotate(lean*0.05);
+  // body
+  ctx.fillStyle='#222'; ctx.fillRect(-40,-15,80,20);
+  ctx.fillStyle='#ff4400'; ctx.fillRect(-30,-22,60,12);
+  // engine
+  ctx.fillStyle='#555'; ctx.fillRect(-15,-10,30,18);
+  // handlebars
+  ctx.fillStyle='#888'; ctx.fillRect(-5,-28,10,8); ctx.fillRect(-24,-25,20,4); ctx.fillRect(4,-25,20,4);
+  // wheels
+  ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(-30,8,16,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(30,8,16,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#444'; ctx.beginPath(); ctx.arc(-30,8,10,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#444'; ctx.beginPath(); ctx.arc(30,8,10,0,Math.PI*2); ctx.fill();
+  // exhaust
+  ctx.fillStyle='rgba(200,200,200,0.4)'; ctx.fillRect(-55,4,18,8);
+  ctx.restore();
+}
+
+// Girl rider on back
+function drawGirlRider(x,y){
+  ctx.save(); ctx.translate(px(x),px(y));
+  ctx.fillStyle='#F4C17A'; ctx.fillRect(-6,-42,12,14);
+  // hair
+  ctx.fillStyle='#222'; ctx.fillRect(-8,-46,16,10); ctx.fillRect(-10,-36,4,14); ctx.fillRect(6,-36,4,14);
+  ctx.fillStyle='#222'; ctx.fillRect(-6,-24,4,3); ctx.fillRect(2,-24,4,3);
+  ctx.fillStyle='#FF69B4'; ctx.fillRect(-8,-28,16,20);
+  ctx.fillStyle='#FF69B4'; ctx.fillRect(-12,-26,5,14); ctx.fillRect(7,-26,5,14);
+  ctx.fillStyle='#3333cc'; ctx.fillRect(-6,-8,12,20);
+  ctx.restore();
+}
+
+// =============================================
+// KEY HANDLERS
+// =============================================
+document.addEventListener('keydown',e=>{
+  keys[e.code]=true;
+  // Level 3 Part 2 food order handled by clicks
+  // Level 3 Part 1 sack key handled below
+  if(gameState==='l3p1_sack') handleSackKey(e.code);
+  if(gameState==='l3p2_fight') handleChefFight(e.code);
+  e.preventDefault();
+});
+document.addEventListener('keyup',e=>{ keys[e.code]=false; });
+
+// =============================================
+// MAIN GAME LOOP
+// =============================================
+let lastTime=0;
+function gameLoop(ts){
+  const dt=Math.min((ts-lastTime)/16.7,3); lastTime=ts;
+  animTimer+=dt;
+  ctx.clearRect(0,0,W,H);
+
+  switch(gameState){
+    case 'title': drawTitle(); break;
+    case 'l3_intro': drawL3Intro(); break;
+    case 'l3p1_select': drawBusSelect(); break;
+    case 'l3p1_gameover': drawGameOver('YOU STINK!'); break;
+    case 'l3p1_hallway': drawHallway(dt); break;
+    case 'l3p1_sack': drawSackGame(dt); break;
+    case 'l3p1_highfive': drawHighFive(dt); break;
+    case 'l3p2_intro': drawTacoBellIntro(); break;
+    case 'l3p2_outside': drawTBOutside(dt); break;
+    case 'l3p2_inside': drawTBInside(dt); break;
+    case 'l3p2_order': drawTBOrder(dt); break;
+    case 'l3p2_gameover': drawGameOver('ORDER FASTER!'); break;
+    case 'l3p2_fight': drawChefFightScene(dt); break;
+    case 'l3p2_eating': drawEatingAnim(dt); break;
+    case 'l3p3_girl': drawGirlApproach(dt); break;
+    case 'l3p3_riding': drawMotorcycleRide(dt); break;
+    case 'l3p3_gameover': drawGameOver('STAY IN YOUR LANE!'); break;
+    case 'l3_ending': drawL3Ending(); break;
+  }
+
+  updateParticles(); drawParticles();
+  frameId=requestAnimationFrame(gameLoop);
+}
+
+// =============================================
+// TITLE SCREEN
+// =============================================
+function drawTitle(){
+  ctx.fillStyle='#050510'; ctx.fillRect(0,0,W,H);
+  // starfield
+  for(let i=0;i<60;i++){
+    const sx=(i*137+animTimer*.5)%W, sy=(i*97)%H;
+    ctx.fillStyle='#fff'; ctx.globalAlpha=0.4+0.6*Math.abs(Math.sin(i+animTimer*.02));
+    ctx.fillRect(sx,sy,1+(i%5===0?1:0),1+(i%5===0?1:0));
+  }
+  ctx.globalAlpha=1;
+  // decorative road lines at bottom
+  ctx.fillStyle='#111'; ctx.fillRect(0,380,W,120);
+  for(let x=(animTimer*3)%80-80;x<W;x+=80){ ctx.fillStyle='#FFD700'; ctx.fillRect(x,437,50,5); }
+  // title box
+  ctx.fillStyle='rgba(0,0,0,0.88)'; ctx.fillRect(60,60,680,200);
+  ctx.strokeStyle='#FF4444'; ctx.lineWidth=3; ctx.strokeRect(60,60,680,200);
+  ctx.fillStyle='#FFD700'; [[60,60],[736,60],[60,256],[736,256]].forEach(([cx,cy])=>ctx.fillRect(cx-5,cy-5,14,14));
+  drawText('BY DWAYNE THE ROCK',W/2,92,6,'#FFD700','center');
+  drawText('GEN Z SPEEDRUN',W/2,135,13,'#FF4444','center');
+  drawText('PT.3',W/2,168,13,'#FF4444','center');
+  drawText('LEVEL THREE',W/2,210,7,'#00ffff','center');
+  // neon glow
+  const alpha=0.5+0.5*Math.sin(animTimer*.08);
+  ctx.fillStyle=`rgba(0,255,255,${alpha*0.3})`; ctx.fillRect(60,60,680,200);
+  // Tung Tung preview
+  drawTungTung(680,300,Math.sin(animTimer*.05)*0.3,'happy');
+  // start btn
+  showOverlay(`
+    <div style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);text-align:center;">
+      <button class="btn btn-green" onclick="startL3()" style="animation:pulse 0.8s infinite;">YES BRO — LEVEL THREE</button>
+    </div>
+  `);
+}
+
+function startL3(){
+  clearOverlay();
+  hideLevelBanner(); hideControlsHint();
+  gameState='l3_intro';
+  showOverlay(`
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;background:rgba(0,0,0,0.95);border:3px solid #FFD700;padding:30px 40px;">
+      <div style="font-family:'Press Start 2P';font-size:10px;color:#FFD700;margin-bottom:12px;line-height:2;">⚡ LEVEL THREE ⚡</div>
+      <div style="font-family:'Press Start 2P';font-size:7px;color:#fff;line-height:2;margin-bottom:20px;">AURA CARRIES OVER<br>FROM LEVEL TWO<br><br>CURRENT AURA: <span style="color:#00FF00;">${aura}</span></div>
+      <button class="btn btn-yellow" onclick="goL3P1Select()">LET'S GO</button>
+    </div>
+  `);
+}
+
+// =============================================
+// LEVEL 3 PART 1 — BUS SELECT
+// =============================================
+let busSelectTimer=0, busHovered=null;
+
+function goL3P1Select(){
+  clearOverlay();
+  gameState='l3p1_select';
+  showLevelBanner('LEVEL 3 — PART 1: CHOOSE YOUR PATH');
+  showControlsHint('CLICK A BUS NUMBER TO CHOOSE YOUR ROUTE');
+}
+
+function drawBusSelect(){
+  // school bus scene
+  ctx.fillStyle='#87CEEB'; ctx.fillRect(0,0,W,300);
+  ctx.fillStyle='#228B22'; ctx.fillRect(0,300,W,200);
+  // road
+  ctx.fillStyle='#555'; ctx.fillRect(0,350,W,80);
+  for(let x=(animTimer*0)%100;x<W;x+=100){ ctx.fillStyle='#FFD700'; ctx.fillRect(x,385,60,5); }
+  // clouds
+  for(let i=0;i<3;i++){
+    const cx=(i*250+70+animTimer*.2)%W;
+    ctx.fillStyle='#fff'; ctx.fillRect(cx,40,60,25); ctx.fillRect(cx+10,25,40,20); ctx.fillRect(cx+30,30,30,20);
+  }
+  // school building bg
+  ctx.fillStyle='#cc8844'; ctx.fillRect(500,100,280,220);
+  ctx.fillStyle='#aa6622'; ctx.fillRect(498,98,284,20);
+  ctx.fillStyle='#88aacc'; ctx.fillRect(520,130,50,50); ctx.fillRect(600,130,50,50); ctx.fillRect(680,130,50,50);
+  ctx.fillStyle='#555'; ctx.fillRect(570,220,60,100);
+  drawText('SCHOOL',630,170,7,'#fff','center');
+  // sign
+  ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.fillRect(100,30,600,60);
+  ctx.strokeStyle='#FFD700'; ctx.lineWidth=2; ctx.strokeRect(100,30,600,60);
+  drawText('WHICH BUS DO YOU TAKE?',W/2,70,9,'#FFD700','center');
+
+  // Bus 67
+  drawBus(120,340,'#FFD700','#000','67');
+  // Bus 41
+  drawBus(450,340,'#FFD700','#000','41');
+
+  // labels
+  ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(120,440,200,45);
+  ctx.strokeStyle='#00FF00'; ctx.lineWidth=2; ctx.strokeRect(120,440,200,45);
+  drawText('ROUTE 67',220,460,7,'#00FF00','center');
+  drawText('[CLICK]',220,478,6,'#aaa','center');
+
+  ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(450,440,200,45);
+  ctx.strokeStyle='#FF4444'; ctx.lineWidth=2; ctx.strokeRect(450,440,200,45);
+  drawText('ROUTE 41',550,460,7,'#FF4444','center');
+  drawText('[CLICK]',550,478,6,'#aaa','center');
+
+  busSelectTimer++;
+}
+
+function drawBus(x,y,bodyColor,textColor,num){
+  ctx.fillStyle=bodyColor; ctx.fillRect(x,y-60,200,60);
+  ctx.fillStyle='#333'; ctx.fillRect(x,y-65,200,8);
+  // windows
+  ctx.fillStyle='#88ccff'; ctx.fillRect(x+10,y-55,30,30); ctx.fillRect(x+50,y-55,30,30); ctx.fillRect(x+90,y-55,30,30); ctx.fillRect(x+130,y-55,30,30);
+  // number
+  ctx.fillStyle='#000'; ctx.fillRect(x+155,y-50,40,20);
+  drawText(num,x+175,y-36,8,'#FFD700','center');
+  // wheels
+  ctx.fillStyle='#222'; ctx.beginPath(); ctx.arc(x+30,y,15,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+160,y,15,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#555'; ctx.beginPath(); ctx.arc(x+30,y,8,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(x+160,y,8,0,Math.PI*2); ctx.fill();
+  // door
+  ctx.fillStyle='#bb9900'; ctx.fillRect(x+170,y-55,25,55);
+}
+
+canvas.addEventListener('click',function(e){
+  const rect=canvas.getBoundingClientRect();
+  const mx=(e.clientX-rect.left)*(W/rect.width);
+  const my=(e.clientY-rect.top)*(H/rect.height);
+
+  if(gameState==='l3p1_select'){
+    // Bus 67 zone
+    if(mx>120&&mx<320&&my>280&&my<490){ chooseBus67(); }
+    // Bus 41 zone
+    if(mx>450&&mx<650&&my>280&&my<490){ chooseBus41(); }
+  }
+
+  if(gameState==='l3p2_order'){ handleOrderClick(mx,my); }
+  if(gameState==='l3p3_girl'){ handleGirlChoice(mx,my); }
+});
+
+function chooseBus41(){
+  clearOverlay();
+  hideControlsHint();
+  gameState='l3p1_gameover';
+}
+
+function chooseBus67(){
+  clearOverlay();
+  hideControlsHint();
+  updateAura(50,'RIGHT BUS!');
+  showOverlay(`
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);text-align:center;background:rgba(0,0,0,0.95);border:3px solid #00FF00;padding:24px 36px;">
+      <div style="font-family:'Press Start 2P';font-size:9px;color:#00FF00;margin-bottom:16px;line-height:2;">ROUTE 67!<br>SWAG CONFIRMED 🔥</div>
+      <button class="btn btn-green" onclick="startHallway()">ARRIVE AT SCHOOL</button>
+    </div>
+  `);
+}
+
+// =============================================
+// LEVEL 3 PART 1 — GAME OVER
+// =============================================
+function drawGameOver(subtitle=''){
+  ctx.fillStyle='#050505'; ctx.fillRect(0,0,W,H);
+  // flicker red
+  const fl=Math.abs(Math.sin(animTimer*.25));
+  ctx.fillStyle=`rgba(255,0,0,${fl*0.15})`; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(100,120,600,220);
+  ctx.strokeStyle='#ff4444'; ctx.lineWidth=3; ctx.strokeRect(100,120,600,220);
+  drawText('GAME OVER',W/2,220,20,'#FF4444','center');
+  if(subtitle) drawText(subtitle,W/2,265,9,'#FF8888','center');
+
+  // restart button based on which game over
+  let restartFn='goL3P1Select';
+  let restartLabel='TRY AGAIN';
+  if(gameState==='l3p2_gameover'){ restartFn='startTBOutside'; restartLabel='RESTART TACO BELL'; }
+  if(gameState==='l3p3_gameover'){ restartFn='startMotorcycleRide'; restartLabel='RIDE AGAIN'; }
+
+  showOverlay(`
+    <div style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);">
+      <button class="btn btn-red" onclick="${restartFn}()">${restartLabel}</button>
+    </div>
+  `,true);
+}
+
+// =============================================
+// LEVEL 3 PART 1 — HALLWAY + HACKY SACK
+// =============================================
+let hallwayState={playerX:80, passerby:[], passerbyTimer:0, sacksInRow:0, sacksTarget:10};
+let sackState={};
+let sackGameActive=false;
+
+function startHallway(){
+  clearOverlay();
+  gameState='l3p1_hallway';
+  showLevelBanner('LEVEL 3 — PART 1: HALLWAY HACKY SACK');
+  showControlsHint('WASD = MOVE | Walk right to find Tung Tung Tung');
+  hallwayState={playerX:80,passerby:[],passerbyTimer:0,sacksInRow:0};
+  P.x=80; P.y=310; P.facing=1;
+}
+
+function drawHallway(dt){
+  // hallway BG
+  ctx.fillStyle='#c8b88a'; ctx.fillRect(0,0,W,H);
+  // floor
+  ctx.fillStyle='#b0a070'; ctx.fillRect(0,380,W,120);
+  for(let tx=0;tx<W;tx+=60){ for(let ty=380;ty<500;ty+=60){ ctx.strokeStyle='#a09060';ctx.lineWidth=1;ctx.strokeRect(tx,ty,60,60); } }
+  // ceiling
+  ctx.fillStyle='#ddd'; ctx.fillRect(0,0,W,30);
+  // lockers
+  for(let lx=0;lx<W;lx+=40){
+    ctx.fillStyle=lx%80===0?'#4466aa':'#3355aa';
+    ctx.fillRect(lx,30,36,160);
+    ctx.fillStyle='#aab'; ctx.fillRect(lx+14,90,8,15);
+  }
+  // floor lines perspective
+  ctx.strokeStyle='#8a7850'; ctx.lineWidth=2;
+  for(let i=0;i<8;i++){
+    const xi=i*(W/8);
+    ctx.beginPath(); ctx.moveTo(xi,380); ctx.lineTo(W/2,300); ctx.stroke();
+  }
+
+  // Tung Tung Tung waiting at right side
+  if(!sackGameActive){
+    drawTungTung(680, 310, Math.sin(animTimer*.05)*0.2, 'normal');
+    drawText('TUNG',686,270,5,'#FFD700','center');
+    drawText('TUNG',686,280,5,'#FFD700','center');
+    drawText('TUNG',686,290,5,'#FFD700','center');
+  }
+
+  // passerby groups
+  if(!sackGameActive){
+    hallwayState.passerbyTimer+=dt;
+    if(hallwayState.passerbyTimer>120){
+      hallwayState.passerbyTimer=0;
+      const isGirls=Math.random()>0.5;
+      hallwayState.passerby.push({x:W+20,isGirls,speed:1.5+Math.random(),shown:false,label:isGirls?'GIRLS':'DUDES'});
+    }
+    hallwayState.passerby.forEach(pb=>{
+      pb.x-=pb.speed*dt;
+      const colors=pb.isGirls?['#FF69B4','#FF1493','#FFB6C1']:['#4444ff','#2244aa','#336699'];
+      for(let i=0;i<3;i++) drawPixelChar(pb.x+i*35,310,pb.isGirls?'#ffccaa':'#cc9966',colors[i],pb.x<W/2?1:-1,Math.floor(animTimer*.08)%4);
+      drawText(pb.label,pb.x+35,280,5,pb.isGirls?'#FF69B4':'#88aaff','center');
+    });
+    hallwayState.passerby=hallwayState.passerby.filter(pb=>pb.x>-80);
+  }
+
+  // Player move
+  if(keys['KeyA']||keys['ArrowLeft']){P.vx=-2.5;P.facing=-1;}
+  else if(keys['KeyD']||keys['ArrowRight']){P.vx=2.5;P.facing=1;}
+  else P.vx*=0.6;
+  if(keys['KeyW']||keys['ArrowUp']) P.vy=-2;
+  else if(keys['KeyS']||keys['ArrowDown']) P.vy=2;
+  else P.vy*=0.6;
+  P.x=Math.max(10,Math.min(W-50,P.x+P.vx));
+  P.y=Math.max(280,Math.min(370,P.y+P.vy));
+  if(Math.abs(P.vx)+Math.abs(P.vy)>0.3){P.frameTimer+=dt;if(P.frameTimer>6){P.frame=(P.frame+1)%4;P.frameTimer=0;}}
+  drawPixelChar(P.x,P.y,'#ffcc99','#2244aa',P.facing,P.frame);
+
+  // Near Tung Tung?
+  if(P.x>580&&!sackGameActive){
+    showOverlay(`<div style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);"><button class="btn btn-cyan" onclick="startSackGame()">START HACKY SACKING [ENTER]</button></div>`);
+  } else if(!sackGameActive){ clearOverlay(); }
+}
+
+// HACKY SACK GAME
+let sackBall={x:400,y:280,vx:0,vy:0,inAir:false,toPlayer:false};
+let sackKey='',sackKeyTimer=0,sackResult=null,sackResultTimer=0;
+let tungAcc=0.9,sackInRow=0,passerbyGroup=null,passerbyGirls=false;
+let sacksPerGroup=0,groupAuraGiven=false;
+
+function startSackGame(){
+  clearOverlay();
+  sackGameActive=true;
+  gameState='l3p1_sack';
+  showLevelBanner('LEVEL 3 — PART 1: HACKY SACK WITH TUNG TUNG TUNG');
+  showControlsHint('Hit the KEY shown above your head when the sack arrives!');
+  sackBall={x:680,y:300,vx:-3,vy:-4,inAir:true,toPlayer:true};
+  sackKey=randomSackKey();
+  sackKeyTimer=0; sackInRow=0; sackResult=null;
+  // init passerby
+  passerbyGroup=null; passerbyGirls=false; sacksPerGroup=0; groupAuraGiven=false;
+}
+
+function randomSackKey(){
+  const keys2='QWERTYUIOPASDFGHJKLZXCVBNM';
+  return keys2[Math.floor(Math.random()*keys2.length)];
+}
+
+function drawSackGame(dt){
+  // hallway bg
+  ctx.fillStyle='#c8b88a'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#b0a070'; ctx.fillRect(0,380,W,120);
+  for(let tx=0;tx<W;tx+=60){for(let ty=380;ty<500;ty+=60){ctx.strokeStyle='#a09060';ctx.lineWidth=1;ctx.strokeRect(tx,ty,60,60);}}
+  ctx.fillStyle='#ddd'; ctx.fillRect(0,0,W,30);
+  for(let lx=0;lx<W;lx+=40){ctx.fillStyle=lx%80===0?'#4466aa':'#3355aa';ctx.fillRect(lx,30,36,160);}
+
+  // passerby spawn
+  if(!passerbyGroup||passerbyGroup.x<-100){
+    passerbyGirls=Math.random()>0.5;
+    passerbyGroup={x:W+20,speed:1.2};
+    sacksPerGroup=0; groupAuraGiven=false;
+  }
+  passerbyGroup.x-=passerbyGroup.speed*dt;
+  const cols=passerbyGirls?['#FF69B4','#FF1493','#FFB6C1']:['#4444ff','#2244aa','#336699'];
+  for(let i=0;i<3;i++) drawPixelChar(passerbyGroup.x+i*32,310,passerbyGirls?'#ffccaa':'#cc9966',cols[i],-1,Math.floor(animTimer*.08)%4);
+  drawText(passerbyGirls?'GIRLS':'DUDES',passerbyGroup.x+45,275,5,passerbyGirls?'#FF69B4':'#88aaff','center');
+
+  // Tung Tung Tung on right
+  const ttFace=sackBall.toPlayer?'normal':'happy';
+  drawTungTung(680,310,Math.sin(animTimer*.1)*0.4,ttFace);
+
+  // Player (left side)
+  drawPixelChar(120,310,'#ffcc99','#2244aa',1,Math.floor(animTimer*.05)%4);
+
+  // Key prompt above player's head
+  if(sackBall.toPlayer&&sackBall.inAir){
+    ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.fillRect(100,250,60,30);
+    ctx.strokeStyle='#FFD700'; ctx.lineWidth=2; ctx.strokeRect(100,250,60,30);
+    drawText(sackKey,130,272,10,'#FFD700','center');
+  }
+
+  // Ball physics
+  sackBall.vy+=0.3*dt;
+  sackBall.x+=sackBall.vx*dt;
+  sackBall.y+=sackBall.vy*dt;
+  // bounce off floor
+  if(sackBall.y>340){ sackBall.y=340; sackBall.vy*=-0.7; sackBall.vx*=0.85; }
+  // Check arrival at player
+  if(sackBall.toPlayer&&sackBall.x<160&&sackBall.y>280){
+    sackKeyTimer=180; // 3 seconds to hit key
+  }
+  // Check arrival at TT
+  if(!sackBall.toPlayer&&sackBall.x>640&&sackBall.y>280){
+    // Tung Tung sacks back (90% acc)
+    if(Math.random()<tungAcc){
+      sackBall.vx=-4-Math.random()*2;
+      sackBall.vy=-5-Math.random()*3;
+      sackBall.toPlayer=true;
+      sackKey=randomSackKey();
+      sackKeyTimer=0;
+    } else {
+      // TT misses
+      sackResult='TUNG MISSES!';
+      sackResultTimer=60;
+      sackInRow=0;
+      setTimeout(()=>resetSackBall(),800);
+    }
+  }
+
+  // Key timer countdown
+  if(sackKeyTimer>0&&sackBall.toPlayer&&sackBall.x<160){
+    sackKeyTimer-=dt;
+    if(sackKeyTimer<=0){
+      // missed
+      sackInRow=0;
+      sackResult='MISS!';
+      sackResultTimer=60;
+      setTimeout(()=>resetSackBall(),800);
+    }
+  }
+
+  drawSack(sackBall.x,sackBall.y);
+
+  // Aura for girls
+  if(passerbyGirls&&!groupAuraGiven&&sacksPerGroup>=2){
+    groupAuraGiven=true;
+    updateAura(50,'girls watching 😍');
+  }
+
+  // Sacks counter
+  ctx.fillStyle='rgba(0,0,0,0.8)'; ctx.fillRect(300,8,200,40);
+  ctx.strokeStyle='#00ffff'; ctx.lineWidth=2; ctx.strokeRect(300,8,200,40);
+  drawText('SACKS: '+sackInRow+'/10',400,33,7,'#00ffff','center');
+
+  // Result flash
+  if(sackResultTimer>0){
+    sackResultTimer-=dt;
+    drawText(sackResult,W/2,200,12,sackResult==='NICE!'?'#00FF00':'#FF4444','center');
+  }
+}
+
+function handleSackKey(code){
+  if(gameState!=='l3p1_sack') return;
+  if(!sackBall.toPlayer||sackBall.x>200) return;
+  const k=code.replace('Key','').replace('Digit','');
+  if(k===sackKey){
+    // Success
+    sackInRow++;
+    sacksPerGroup++;
+    sackResult='NICE!';
+    sackResultTimer=40;
+    spawnParticle(130,310,'#00FF00');
+    // send ball back to TT
+    sackBall.vx=4+Math.random()*2;
+    sackBall.vy=-5-Math.random()*3;
+    sackBall.toPlayer=false;
+    sackKeyTimer=0;
+    if(sackInRow>=10){
+      // WIN
+      setTimeout(()=>startHighFive(),600);
+    }
+  } else {
+    sackResult='WRONG KEY!';
+    sackResultTimer=60;
+    sackInRow=0;
+    setTimeout(()=>resetSackBall(),800);
+  }
+}
+
+function resetSackBall(){
+  if(gameState!=='l3p1_sack') return;
+  sackBall={x:680,y:300,vx:-3,vy:-4,inAir:true,toPlayer:true};
+  sackKey=randomSackKey();
+  sackKeyTimer=0;
+}
+
+// HIGH FIVE ANIMATION
+let highFiveT=0;
+function startHighFive(){
+  gameState='l3p1_highfive';
+  highFiveT=0;
+  hideLevelBanner(); hideControlsHint(); clearOverlay();
+  updateAura(200,'10 sacks in a row!');
+  showOverlay(`<div style="position:absolute;top:60px;left:50%;transform:translateX(-50%);font-family:'Press Start 2P';font-size:12px;color:#FFD700;text-shadow:3px 3px 0 #000;text-align:center;">HIGH FIVE!!! 🙌</div>`,false);
+}
+
+function drawHighFive(dt){
+  ctx.fillStyle='#c8b88a'; ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#b0a070'; ctx.fillRect(0,380,W,120);
+  ctx.fillStyle='#ddd'; ctx.fillRect(0,0,W,30);
+
+  highFiveT+=dt;
+  // Player and TT facing each other
+  const bounce=Math.abs(Math.sin(highFiveT*.15))*15;
+  drawPixelChar(260,310,'#ffcc99','#2244aa',1,0);
+  drawTungTung(520,310,0,'happy');
+  // arms extended toward each other
+  ctx.strokeStyle='#F4C17A'; ctx.lineWidth=8;
+  ctx.beginPath(); ctx.moveTo(290,320); ctx.lineTo(490,320); ctx.stroke();
+  // flash
+  if(highFiveT>20&&highFiveT%20<10){
+    ctx.fillStyle='rgba(255,215,0,0.25)'; ctx.fillRect(0,0,W,H);
+    drawText('🙌',W/2,280,28,'#FFD700','center');
+  }
+  for(let i=0;i<8;i++) spawnParticle(W/2+(Math.random()-.5)*200,320,['#FFD700','#FF69B4','#00FF00'][i%3]);
+
+  if(highFiveT>120){
+    clearOverlay();
+    setTimeout(()=>startTacoBellIntro(),300);
+  }
+}
+
+// =============================================
+// LEVEL 3 PART 2 — TACO BELL
+// =============================================
+let tbState={playerX:80,playerY:340,inside:false,orders:[],timerLeft:60,timerActive:false,mealCount:0,ordered:false};
+let orderAnim=0;
+
+function startTacoBellIntro(){
+  gameState='l3p2_intro';
+  clearOverlay();
+  showLevelBanner('LEVEL 3 — PART 2: TACO BELL RAGE BAIT');
+  // play lava chicken background (audio)
+  playBGM('tacobell');
+  showOverlay(`
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.97);border:3px solid #ff6600;padding:28px 36px;text-align:center;">
+      <div style="font-family:'Press Start 2P';font-size:9px;color:#ff6600;margin-bottom:16px;line-height:2.2;">LEVEL 3 — PART 2</div>
+      <div style="font-family:'Press Start 2P';font-size:7px;color:#FFD700;margin-bottom:8px;line-height:2;">MISSION: MAX RAGE BAIT 🌮</div>
+      <div style="font-family:'Press Start 2P';font-size:6px;color:#ccc;line-height:2;margin-bottom:18px;">Order 10 meals at Taco Bell<br>1 minute before closing!</div>
+      <button class="btn btn-orange" onclick="startTBOutside()">GO TO TACO BELL</button>
+    </div>
+  `);
+}
+
+function drawTacoBellIntro(){ ctx.fillStyle='#050510'; ctx.fillRect(0,0,W,H); }
+
+// TB OUTSIDE
+let tbOutsideX=80,tbDoorReached=false;
+function startTBOutside(){
+  gameState='l3p2_outside';
+  clearOverlay();
+  tbOutsideX=80; tbDoorReached=false;
+  showLevelBanner('LEVEL 3 — PART 2: TACO BELL');
+  showControlsHint('WASD = MOVE | Walk to the Taco Bell entrance →');
+  tbState.timerLeft=60; tbState.mealCount=0; tbState.orders=[];
+  showTimer(false);
+  P.x=80; P.y=340; P.facing=1;
+}
+
+function drawTBOutside(dt){
+  // sky evening
+  ctx.fillStyle='#1a0a2e'; ctx.fillRect(0,0,W,300);
+  for(let i=0;i<40;i++){ctx.fillStyle='#fff';ctx.globalAlpha=0.6;ctx.fillRect((i*137)%W,(i*97)%260,1,1);}
+  ctx.globalAlpha=1;
+  // ground
+  ctx.fillStyle='#444'; ctx.fillRect(0,300,W,200);
+  ctx.fillStyle='#555'; ctx.fillRect(0,330,W,10);
+  // parking lot
+  for(let x=100;x<W-100;x+=80){ ctx.fillStyle='#fff'; ctx.globalAlpha=0.3; ctx.fillRect(x,350,50,4); }
+  ctx.globalAlpha=1;
+  // Taco Bell building
+  ctx.fillStyle='#7B1FA2'; ctx.fillRect(400,80,360,260);
+  ctx.fillStyle='#9C27B0'; ctx.fillRect(400,78,360,20);
+  ctx.fillStyle='#CE93D8'; ctx.fillRect(420,108,80,70); ctx.fillRect(520,108,80,70); ctx.fillRect(640,108,80,70);
+  ctx.fillStyle='#6B1C8A'; ctx.fillRect(550,200,80,140);
+  // Taco Bell sign
+  ctx.fillStyle='#fff'; ctx.fillRect(440,40,280,50);
+  ctx.strokeStyle='#7B1FA2'; ctx.lineWidth=3; ctx.strokeRect(440,40,280,50);
+  drawText('TACO BELL',580,74,11,'#7B1FA2','center');
+  // CLOSING SIGN
+  ctx.fillStyle='#FF4444'; ctx.fillRect(430,148,130,55);
+  ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.strokeRect(430,148,130,55);
+  drawText('CLOSING',495,168,6,'#fff','center');
+  drawText('IN 1 MIN!',495,186,6,'#fff','center');
+  // door
+  ctx.fillStyle='#5C1A7A'; ctx.fillRect(575,270,55,90);
+  ctx.strokeStyle='#CE93D8'; ctx.lineWidth=2; ctx.strokeRect(575,270,55,90);
+  ctx.fillStyle='#CE93D8'; ctx.fillRect(600,300,6,15);
+  // door label
+  drawText('ENTER',602,255,5,'#fff','center');
+
+  // Player move
+  if(keys['KeyA']||keys['ArrowLeft']){P.vx=-2.5;P.facing=-1;}
+  else if(keys['KeyD']||keys['ArrowRight']){P.vx=2.5;P.facing=1;}
+  else P.vx*=0.6;
+  if(keys['KeyW']||keys['ArrowUp']) P.vy=-2;
+  else if(keys['KeyS']||keys['ArrowDown']) P.vy=2;
+  else P.vy*=0.6;
+  P.x=Math.max(10,Math.min(W-50,P.x+P.vx));
+  P.y=Math.max(290,Math.min(380,P.y+P.vy));
+  if(Math.abs(P.vx)+Math.abs(P.vy)>0.3){P.frameTimer+=dt;if(P.frameTimer>6){P.frame=(P.frame+1)%4;P.frameTimer=0;}}
+  drawPixelChar(P.x,P.y,'#ffcc99','#2244aa',P.facing,P.frame);
+
+  // Near door?
+  if(P.x>540&&P.y>260){
+    showOverlay(`<div style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);"><button class="btn btn-purple" onclick="enterTacoBell()">WALK IN [E]</button></div>`);
+    if(keys['KeyE']) enterTacoBell();
+  } else { clearOverlay(); }
+}
+
+let tbTimerInterval=null;
+function enterTacoBell(){
+  clearOverlay();
+  gameState='l3p2_inside';
+  hideControlsHint();
+  P.x=120; P.y=340; P.facing=1;
+  tbState.mealCount=0; tbState.timerLeft=60;
+  showLevelBanner('LEVEL 3 — PART 2: INSIDE TACO BELL');
+  showControlsHint('WASD = MOVE | Walk to counter to order 10 meals!');
+  // Start timer
+  showTimer(true); setTimerText('⏱ 1:00');
+  if(tbTimerInterval) clearInterval(tbTimerInterval);
+  tbTimerInterval=setInterval(()=>{
+    if(gameState!=='l3p2_inside'&&gameState!=='l3p2_order') return;
+    tbState.timerLeft--;
+    const m=Math.floor(tbState.timerLeft/60);
+    const s=tbState.timerLeft%60;
+    setTimerText('⏱ '+m+':'+(s<10?'0'+s:s));
+    if(tbState.timerLeft<=0){
+      clearInterval(tbTimerInterval);
+      if(tbState.mealCount<10){
+        showTimer(false); hideControlsHint(); clearOverlay();
+        gameState='l3p2_gameover';
+      }
+    }
+  },1000);
+}
+
+function drawTBInside(dt){
+  drawTacoBellBG();
+  // Player move
+  if(keys['KeyA']||keys['ArrowLeft']){P.vx=-2.5;P.facing=-1;}
+  else if(keys['KeyD']||keys['ArrowRight']){P.vx=2.5;P.facing=1;}
+  else P.vx*=0.6;
+  if(keys['KeyW']||keys['ArrowUp']) P.vy=-2;
+  else if(keys['KeyS']||keys['ArrowDown']) P.vy=2;
+  else P.vy*=0.6;
+  P.x=Math.max(10,Math.min(W-50,P.x+P.vx));
+  P.y=Math.max(280,Math.min(390,P.y+P.vy));
+  if(Math.abs(P.vx)+Math.abs(P.vy)>0.3){P.frameTimer+=dt;if(P.frameTimer>6){P.frame=(P.frame+1)%4;P.frameTimer=0;}}
+  drawPixelChar(P.x,P.y,'#ffcc99','#2244aa',P.facing,P.frame);
+  // Near counter
+  if(P.x>280&&P.x<520&&P.y<320){
+    showOverlay(`<div style="position:absolute;bottom:80px;left:50%;transform:translateX(-50%);"><button class="btn btn-orange" onclick="openOrderMenu()">ORDER [E]</button></div>`);
+    if(keys['KeyE']){keys['KeyE']=false;openOrderMenu();}
+  } else { clearOverlay(); }
+}
+
+function drawTacoBellBG(){
+  // walls
+  ctx.fillStyle='#7B1FA2'; ctx.fillRect(0,0,W,H);
+  // floor
+  ctx.fillStyle='#f5e0ff'; ctx.fillRect(0,350,W,150);
+  for(let tx=0;tx<W;tx+=50){for(let ty=350;ty<500;ty+=50){ctx.strokeStyle='#e0c0f0';ctx.lineWidth=1;ctx.strokeRect(tx,ty,50,50);}}
+  // ceiling
+  ctx.fillStyle='#6A1B9A'; ctx.fillRect(0,0,W,40);
+  // TB sign top
+  ctx.fillStyle='#fff'; ctx.fillRect(150,4,500,32);
+  drawText('TACO BELL',W/2,26,10,'#7B1FA2','center');
+
+  // BIG NOTICE SIGN — very visible
+  ctx.fillStyle='#FF0000'; ctx.fillRect(180,50,440,90);
+  ctx.strokeStyle='#FFD700'; ctx.lineWidth=4; ctx.strokeRect(180,50,440,90);
+  ctx.fillStyle='#FFD700'; ctx.fillRect(182,52,436,4); ctx.fillRect(182,132,436,4);
+  drawText('⚠ WELCOME TO TACO BELL ⚠',W/2,76,7,'#fff','center');
+  drawText('Please do NOT rage bait us',W/2,96,6,'#FFD700','center');
+  drawText('by ordering 10+ items 1 min',W/2,114,6,'#FFD700','center');
+  drawText('before closing!!',W/2,132,6,'#FFD700','center');
+
+  // counter
+  ctx.fillStyle='#6B1C8A'; ctx.fillRect(200,240,400,80);
+  ctx.fillStyle='#CE93D8'; ctx.fillRect(200,235,400,12);
+  // menu boards
+  ctx.fillStyle='#000'; ctx.fillRect(220,150,120,80); ctx.fillRect(360,150,100,80); ctx.fillRect(480,150,120,80);
+  drawText('MENU',280,170,6,'#FF8800','center');
+  drawText('BAJA BLAST',280,190,4,'#00FFFF','center');
+  drawText('DORI TACO',280,205,4,'#FF8800','center');
+  drawText('BURRITO',280,220,4,'#FF6600','center');
+  // workers
+  for(let i=0;i<3;i++){
+    const wx=260+i*130;
+    ctx.fillStyle='#CE93D8'; ctx.fillRect(wx-12,244,24,36); // uniform
+    ctx.fillStyle='#ffcc99'; ctx.fillRect(wx-8,226,16,20); // head
+    ctx.fillStyle='#7B1FA2'; ctx.fillRect(wx-12,220,24,8); // hat
+    ctx.fillStyle='#000'; ctx.fillRect(wx-5,231,3,3); ctx.fillRect(wx+2,231,3,3);
+    ctx.fillStyle='#cc4444'; ctx.fillRect(wx-3,238,6,2);
+  }
+  // meal count display
+  ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.fillRect(580,250,200,70);
+  ctx.strokeStyle='#ff6600'; ctx.lineWidth=2; ctx.strokeRect(580,250,200,70);
+  drawText('ORDERS:',680,272,6,'#ff8800','center');
+  drawText(tbState.mealCount+' / 10',680,298,9,tbState.mealCount>=10?'#00FF00':'#FFD700','center');
+}
+
+const MEALS=[
+  {name:'Baja Blast',color:'#00CCFF',emoji:'🥤',aura:10},
+  {name:'Dorito Taco',color:'#FF8800',emoji:'🌮',aura:15},
+  {name:'Ranch Burrito',color:'#88FF44',emoji:'🌯',aura:12},
+  {name:'Crunchwrap',color:'#FFD700',emoji:'🫔',aura:14},
+  {name:'Nacho Fries',color:'#FF6600',emoji:'🍟',aura:10},
+  {name:'Cheesy Gordita',color:'#FFA500',emoji:'🧀',aura:12},
+  {name:'Quesarito',color:'#FF4444',emoji:'🫔',aura:13},
+  {name:'BigBackBigMac',color:'#cc4400',emoji:'🍔',aura:20},
+  {name:'Spicy Potato Soft Taco',color:'#FF5500',emoji:'🥔',aura:11},
+  {name:'Mexican Pizza',color:'#aa2200',emoji:'🍕',aura:15},
+];
+
+function openOrderMenu(){
+  if(gameState!=='l3p2_inside') return;
+  keys['KeyE']=false;
+  gameState='l3p2_order';
+  clearOverlay();
+  hideControlsHint();
+}
+
+function drawTBOrder(dt){
+  drawTacoBellBG();
+  // order panel
+  ctx.fillStyle='rgba(0,0,0,0.95)'; ctx.fillRect(20,30,760,440);
+  ctx.strokeStyle='#ff6600'; ctx.lineWidth=3; ctx.strokeRect(20,30,760,440);
+  drawText('ORDER MENU — CLICK ITEMS TO ORDER',W/2,58,7,'#ff6600','center');
+  drawText('MEALS ORDERED: '+tbState.mealCount+'/10',W/2,78,6,tbState.mealCount>=10?'#00FF00':'#FFD700','center');
+  // meal grid
+  const cols=5, rows=2;
+  MEALS.forEach((m,i)=>{
+    const col=i%cols, row=Math.floor(i/cols);
+    const mx=30+col*148, my=95+row*160;
+    ctx.fillStyle='rgba(50,0,80,0.9)'; ctx.fillRect(mx,my,140,150);
+    ctx.strokeStyle=m.color; ctx.lineWidth=2; ctx.strokeRect(mx,my,140,150);
+    drawText(m.emoji,mx+70,my+55,24,'#fff','center');
+    // name wordwrap
+    const words=m.name.split(' ');
+    let line='',lines=[];
+    words.forEach(w=>{if((line+' '+w).length<13) line+=(line?' ':'')+w;else{lines.push(line);line=w;}});
+    lines.push(line);
+    lines.forEach((l,li)=>drawText(l,mx+70,my+88+li*14,5,m.color,'center'));
+    drawText('+'+m.aura+' AURA',mx+70,my+130,5,'#00FF00','center');
+    drawText('[CLICK]',mx+70,my+145,4,'#888','center');
+  });
+  drawText('Once you hit 10 orders the chefs will come! ⚠',W/2,458,5,'#ff4444','center');
+  orderAnim+=dt;
+}
+
+function handleOrderClick(mx,my){
+  if(gameState!=='l3p2_order') return;
+  const cols=5;
+  MEALS.forEach((m,i)=>{
+    const col=i%cols, row=Math.floor(i/cols);
+    const bx=30+col*148, by=95+row*160;
+    if(mx>bx&&mx<bx+140&&my>by&&my<by+150){
+      tbState.mealCount++;
+      updateAura(m.aura,m.name);
+      spawnParticle(W/2,250,'#ff8800');
+      if(tbState.mealCount>=10){
+        // CHEFS ATTACK
+        clearInterval(tbTimerInterval);
+        showTimer(false);
+        clearOverlay();
+        setTimeout(()=>startChefFight(),400);
+      }
+    }
+  });
+}
+
+// CHEF FIGHT
+let chefs=[], chefFightT=0, playerHitTimer=0;
+let chefHP=[4,4,4,4], playerHP=4, chefDead=[false,false,false,false];
+const CHEF_POSITIONS=[[120,280],[280,280],[500,280],[650,280]];
+
+function startChefFight(){
+  gameState='l3p2_fight';
+  clearOverlay();
+  chefFightT=0; playerHP=4; chefHP=[4,4,4,4]; chefDead=[false,false,false,false]; playerHitTimer=0;
+  P.x=400; P.y=360; P.facing=1;
+  document.getElementById('health-display').style.display='block';
+  setHP(4);
+  showLevelBanner('LEVEL 3 — PART 2: CHEF FIGHT');
+  showControlsHint('WASD = MOVE | E = SWING TUNG\'S BAT | Defeat all 4 chefs!');
+}
+
+function drawChefFightScene(dt){
+  // dark kitchen BG
+  ctx.fillStyle='#1a0a0a'; ctx.fillRect(0,0,W,H);
+  // tiles
+  for(let tx=0;tx<W;tx+=40){for(let ty=0;ty<H;ty+=40){ ctx.fillStyle=(tx+ty)%80===0?'#2a1a1a':'#221212'; ctx.fillRect(tx,ty,40,40); }}
+  // ground
+  ctx.fillStyle='#3a1a1a'; ctx.fillRect(0,400,W,100);
+  // kitchen counters
+  ctx.fillStyle='#555'; ctx.fillRect(0,240,80,140); ctx.fillRect(W-80,240,80,140);
+  // stoves
+  ctx.fillStyle='#444'; ctx.fillRect(10,250,60,60);
+  for(let b=0;b<4;b++){ ctx.fillStyle='#ff6600'; ctx.beginPath(); ctx.arc(20+(b%2)*30,260+(Math.floor(b/2)*28),8,0,Math.PI*2); ctx.fill(); }
+
+  chefFightT+=dt;
+
+  // draw chefs
+  chefs=CHEF_POSITIONS;
+  for(let i=0;i<4;i++){
+    if(!chefDead[i]){
+      // chef moves toward player
+      const cx=CHEF_POSITIONS[i][0], cy=CHEF_POSITIONS[i][1];
+      drawChef(cx,cy,chefHP[i],false,chefFightT+i*15);
+      // attack player if close
+      if(Math.abs(P.x-cx)<60&&Math.abs(P.y-cy)<60&&playerHitTimer<=0){
+        playerHP=Math.max(0,playerHP-1);
+        setHP(playerHP);
+        playerHitTimer=60;
+        spawnParticle(P.x,P.y,'#FF4444');
+        if(playerHP<=0){ gameOverChef(); return; }
+      }
+    } else {
+      drawChef(CHEF_POSITIONS[i][0],CHEF_POSITIONS[i][1]+20,0,true,0);
+    }
+  }
+  if(playerHitTimer>0) playerHitTimer-=dt;
+
+  // Player move
+  if(keys['KeyA']||keys['ArrowLeft']){P.vx=-2.5;P.facing=-1;}
+  else if(keys['KeyD']||keys['ArrowRight']){P.vx=2.5;P.facing=1;}
+  else P.vx*=0.6;
+  if(keys['KeyW']||keys['ArrowUp']) P.vy=-2.5;
+  else if(keys['KeyS']||keys['ArrowDown']) P.vy=2.5;
+  else P.vy*=0.6;
+  P.x=Math.max(10,Math.min(W-50,P.x+P.vx));
+  P.y=Math.max(240,Math.min(400,P.y+P.vy));
+  if(Math.abs(P.vx)+Math.abs(P.vy)>0.3){P.frameTimer+=dt;if(P.frameTimer>6){P.frame=(P.frame+1)%4;P.frameTimer=0;}}
+  drawPixelChar(P.x,P.y,'#ffcc99','#2244aa',P.facing,P.frame);
+
+  // Baseball bat
+  ctx.save(); ctx.translate(px(P.x+14+(P.facing>0?18:-18)),px(P.y+8));
+  const batSwing=Math.sin(chefFightT*.3)*0.4;
+  ctx.rotate(batSwing*(P.facing>0?1:-1));
+  ctx.fillStyle='#8B4513'; ctx.fillRect(-3,-28,6,28);
+  ctx.fillStyle='#cc7722'; ctx.fillRect(-5,-36,10,14);
+  ctx.restore();
+
+  // Check all dead
+  if(chefDead.every(d=>d)){
+    setTimeout(()=>startEatingAnim(),500);
+  }
+}
+
+function handleChefFight(code){
+  if(gameState!=='l3p2_fight'||code!=='KeyE') return;
+  // hit nearest chef
+  for(let i=0;i<4;i++){
+    if(!chefDead[i]){
+      const cx=CHEF_POSITIONS[i][0], cy=CHEF_POSITIONS[i][1];
+      if(Math.abs(P.x-cx)<90&&Math.abs(P.y-cy)<80){
+        chefHP[i]--;
+        spawnParticle(cx,cy,'#FFD700');
+        if(chefHP[i]<=0){ chefDead[i]=true; updateAura(75,'chef defeated!'); }
+        return;
+      }
+    }
+  }
+}
+
+function gameOverChef(){
+  gameState='l3p2_gameover';
+  document.getElementById('health-display').style.display='none';
+  clearOverlay(); hideLevelBanner(); hideControlsHint(); showTimer(false);
+}
+
+// EATING ANIMATION
+let eatingT=0;
+function startEatingAnim(){
+  gameState='l3p2_eating';
+  eatingT=0;
+  document.getElementById('health-display').style.display='none';
+  clearOverlay();
+  updateAura(300,'defeated all chefs!');
+  showLevelBanner('LEVEL 3 — PART 2: COMPLETE');
+  showOverlay(`<div style="position:absolute;top:30px;left:50%;transform:translateX(-50%);font-family:'Press Start 2P';font-size:9px;color:#FFD700;text-align:center;text-shadow:2px 2px 0 #000;">🏠 AT HOME — EATING TACO BELL 📱</div>`,false);
+}
+
+function drawEatingAnim(dt){
+  // cozy home scene
+  ctx.fillStyle='#1a0a30'; ctx.fillRect(0,0,W,H);
+  // wall
+  ctx.fillStyle='#2a1a40'; ctx.fillRect(0,0,W,360);
+  // floor
+  ctx.fillStyle='#3a2810'; ctx.fillRect(0,360,W,140);
+  // rug
+  ctx.fillStyle='#5a3060'; ctx.fillRect(150,360,500,80);
+  for(let i=0;i<6;i++){ctx.strokeStyle='#7a5080';ctx.lineWidth=2;ctx.strokeRect(155+i*4,364,490-i*8,72-i*2);}
+  // couch
+  ctx.fillStyle='#4a2060'; ctx.fillRect(120,280,400,100);
+  ctx.fillStyle='#3a1050'; ctx.fillRect(120,280,400,25);
+  ctx.fillStyle='#5a3080'; ctx.fillRect(120,280,30,100); ctx.fillRect(490,280,30,100);
+  // TV
+  ctx.fillStyle='#111'; ctx.fillRect(530,180,220,130);
+  ctx.fillStyle='#000'; ctx.fillRect(536,186,208,112);
+  // TikTok screen
+  const ttBg=['#ff0050','#69C9D0','#000'];
+  ctx.fillStyle='#000'; ctx.fillRect(536,186,208,112);
+  ctx.fillStyle='#ff0050'; ctx.fillRect(536,186,70,112);
+  ctx.fillStyle='#69C9D0'; ctx.fillRect(674,186,70,112);
+  ctx.fillStyle='#fff'; ctx.fillRect(606,186,68,112);
+  drawText('TikTok',640,248,8,'#000','center');
+  // TV stand
+  ctx.fillStyle='#333'; ctx.fillRect(600,310,80,30);
+  // character on couch eating
+  eatingT+=dt;
+  const muncho=Math.abs(Math.sin(eatingT*.15));
+  drawPixelChar(280,290,'#ffcc99','#2244aa',1,0,false,true);
+  // taco bell bag
+  ctx.fillStyle='#7B1FA2'; ctx.fillRect(320,310,30,25);
+  ctx.fillStyle='#fff'; drawText('TB',330,328,6,'#fff','center');
+  // food in hand
+  ctx.fillStyle='#FF8800'; ctx.fillRect(308,295+muncho*4,12,8);
+  // ZZZ float
+  const zzAlpha=0.5+0.5*Math.sin(eatingT*.05);
+  ctx.globalAlpha=zzAlpha; drawText('😎',260,260,14,'#fff'); ctx.globalAlpha=1;
+
+  // Taco Bell receipt scroll
+  ctx.fillStyle='rgba(0,0,0,0.85)'; ctx.fillRect(30,220,130,140);
+  ctx.strokeStyle='#ff6600'; ctx.lineWidth=2; ctx.strokeRect(30,220,130,140);
+  drawText('RECEIPT',95,238,5,'#ff6600','center');
+  tbState.orders.concat(MEALS.slice(0,10)).slice(0,5).forEach((m,i)=>{
+    drawText((m.emoji||'🌮')+' x1',95,255+i*18,5,'#aaa','center');
+  });
+  drawText('TOTAL: 10',95,348,5,'#00FF00','center');
+
+  if(eatingT>220){
+    clearOverlay(); hideLevelBanner();
+    showOverlay(`
+      <div style="position:absolute;bottom:60px;left:50%;transform:translateX(-50%);text-align:center;background:rgba(0,0,0,0.95);border:3px solid #ff6600;padding:20px 30px;">
+        <div style="font-family:'Press Start 2P';font-size:7px;color:#00FF00;margin-bottom:16px;line-height:2;">PART 2 COMPLETE! +300 AURA 🔥<br>Aura: ${aura}</div>
+        <button class="btn btn-orange" onclick="startGirlScene()">PART 3 →</button>
+      </div>
+    `);
+  }
+}
+
+// =============================================
+// LEVEL 3 PART 3 — GIRL + MOTORCYCLE RIDE
+// =============================================
+let girlApproachT=0, girlPhase=0, girlChoice=null;
+
+function startGirlScene(){
+  clearOverlay();
+  gameState='l3p3_girl';
+  girlApproachT=0; girlPhase=0; girlChoice=null;
+  P.x=200; P.y=350; P.facing=1;
+  showLevelBanner('LEVEL 3 — PART 3: THE RIDE TO OHIO');
+  showControlsHint('WASD = MOVE');
+  playBGM('thickOfIt');
+}
+
+let girlX=700,girlApproaching=true;
+
+function drawGirlApproach(dt){
+  // suburb street
+  ctx.fillStyle='#87CEEB'; ctx.fillRect(0,0,W,320);
+  for(let i=0;i<4;i++){const cx=(i*250+30)%W;ctx.fillStyle='#fff';ctx.fillRect(cx,60,80,30);ctx.fillRect(cx+10,45,60,20);}
+  // road
+  ctx.fillStyle='#555'; ctx.fillRect(0,320,W,180);
+  for(let x=(animTimer*0)%120;x<W;x+=120){ctx.fillStyle='#FFD700';ctx.globalAlpha=0.5;ctx.fillRect(x,395,70,6);}
+  ctx.globalAlpha=1;
+  // houses
+  for(let i=0;i<3;i++){
+    const hx=i*250;
+    ctx.fillStyle=['#cc9966','#9966cc','#66cc99'][i]; ctx.fillRect(hx,180,180,160);
+    ctx.fillStyle=['#aa7744','#7744aa','#44aa77'][i]; ctx.fillRect(hx-10,175,200,12);
+    // roof
+    ctx.fillStyle=['#883322','#554488','#228855'][i];
+    ctx.beginPath(); ctx.moveTo(hx-10,175); ctx.lineTo(hx+90,110); ctx.lineTo(hx+190,175); ctx.closePath(); ctx.fill();
+    ctx.fillStyle='#88ccff'; ctx.fillRect(hx+30,210,50,50); ctx.fillRect(hx+100,210,50,50);
+    ctx.fillStyle='#8B4513'; ctx.fillRect(hx+70,280,40,60);
+  }
+
+  girlApproachT+=dt;
+  // Girl walks toward player
+  if(girlApproaching&&girlX>300){ girlX-=1.2*dt; }
+  else if(girlX<=300){ girlApproaching=false; }
+
+  drawGirlRider(girlX,350);
+  // speech bubble
+  if(!girlApproaching){
+    ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.fillRect(400,260,340,60);
+    ctx.strokeStyle='#FF69B4'; ctx.lineWidth=2; ctx.strokeRect(400,260,340,60);
+    drawText('Hey...can you give me',W/2+55,283,5,'#FF69B4','center');
+    drawText('a ride to Ohio? 🤭',W/2+55,300,5,'#FF69B4','center');
+  }
+
+  // Player
+  if(keys['KeyA']||keys['ArrowLeft']){P.vx=-2.5;P.facing=-1;}
+  else if(keys['KeyD']||keys['ArrowRight']){P.vx=2.5;P.facing=1;}
+  else P.vx*=0.6;
+  if(keys['KeyW']||keys['ArrowUp']) P.vy=-2;
+  else if(keys['KeyS']||keys['ArrowDown']) P.vy=2;
+  else P.vy*=0.6;
+  P.x=Math.max(10,Math.min(W-50,P.x+P.vx));
+  P.y=Math.max(310,Math.min(390,P.y+P.vy));
+  if(Math.abs(P.vx)+Math.abs(P.vy)>0.3){P.frameTimer+=dt;if(P.frameTimer>6){P.frame=(P.frame+1)%4;P.frameTimer=0;}}
+  drawPixelChar(P.x,P.y,'#ffcc99','#2244aa',P.facing,P.frame);
+
+  // choice buttons once girl stops
+  if(!girlApproaching&&girlChoice===null){
+    showOverlay(`
+      <div style="position:absolute;bottom:20px;left:50%;transform:translateX(-50%);display:flex;gap:10px;">
+        <button class="btn btn-blue" onclick="pickGirlChoice('innocent')" style="font-size:6px;padding:8px 12px;">[INNOCENT] Uh sure, I guess!</button>
+        <button class="btn btn-green" onclick="pickGirlChoice('nonchalant')" style="font-size:6px;padding:8px 12px;">[NON-CHALANT] Yeah, hop on.</button>
+        <button class="btn btn-yellow" onclick="pickGirlChoice('ego')" style="font-size:6px;padding:8px 12px;">[EGO] Only because my bike<br>needs to be seen. 😎</button>
+      </div>
+    `);
+  }
+}
+
+function handleGirlChoice(mx,my){}// handled by onclick
+
+function pickGirlChoice(choice){
+  clearOverlay();
+  girlChoice=choice;
+  const auraMap={innocent:50,nonchalant:100,ego:200};
+  updateAura(auraMap[choice],'rizz response');
+  const labels={innocent:'Uh sure, I guess!',nonchalant:'Yeah, hop on.',ego:'Only because my bike needs to be seen. 😎'};
+  showOverlay(`
+    <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,0,0,0.96);border:3px solid #FFD700;padding:24px 36px;text-align:center;">
+      <div style="font-family:'Press Start 2P';font-size:7px;color:#FFD700;line-height:2.2;margin-bottom:16px;">You: "${labels[choice]}"</div>
+      <div style="font-family:'Press Start 2P';font-size:7px;color:#FF69B4;line-height:2;margin-bottom:20px;">+${auraMap[choice]} AURA 🔥</div>
+      <button class="btn btn-yellow" onclick="startMotorcycleRide()">HOP ON THE BIKE →</button>
+    </div>
+  `);
+}
+
+// =============================================
+// MOTORCYCLE DODGE GAME
+// =============================================
+const LANE_COUNT=3;
+const LANE_Y=[220,310,390];
+let rideState={lane:1,laneY:310,targetLaneY:310,speed:3,distance:0,maxDistance:2000,obstacles:[],spawnTimer:0,crashed:false,score:0};
+let rideAnimT=0, canMove=true, laneTransition=false;
+
+const OBSTACLES=[
+  {type:'skibidi',label:'SKIBIDI TOILET!',width:60,lanes:1,color:'#4488ff',emoji:'🚽'},
+  {type:'tiktokad',label:'TIKTOK AD',width:70,lanes:1,color:'#ff0050',emoji:'📱'},
+  {type:'teen',label:'PHONE TEEN',width:40,lanes:1,color:'#aaaaff',emoji:'👦'},
+  {type:'kimjongun',label:'KIM JONG UN',width:65,lanes:1,color:'#aa2222',emoji:'👨‍💼'},
+  {type:'sonic',label:'U GOTTA GO FAST!',width:80,lanes:1,color:'#4444ff',emoji:'⚡'},
+  {type:'speed',label:'iSHOW SPEED + CROWD',width:220,lanes:3,color:'#ff6600',emoji:'😱'},
+];
+
+function startMotorcycleRide(){
+  clearOverlay();
+  gameState='l3p3_riding';
+  rideState={lane:1,laneY:LANE_Y[1],targetLaneY:LANE_Y[1],speed:3,distance:0,maxDistance:2400,obstacles:[],spawnTimer:60,crashed:false,score:0};
+  rideAnimT=0; canMove=true; laneTransition=false;
+  showLevelBanner('LEVEL 3 — PART 3: RIDE TO OHIO');
+  showControlsHint('← → ARROW KEYS = SWITCH LANES | Dodge obstacles!');
+  playBGM('thickOfIt');
+}
+
+function drawMotorcycleRide(dt){
+  rideAnimT+=dt;
+
+  // Road BG — scrolling
+  const scroll=(rideAnimT*4)%100;
+  // sky gradient
+  ctx.fillStyle='#0a0a2e'; ctx.fillRect(0,0,W,200);
+  // stars
+  for(let i=0;i<40;i++){ctx.fillStyle='#fff';ctx.globalAlpha=0.5;ctx.fillRect((i*137+rideAnimT*0.2)%W,(i*67)%180,1,1);}
+  ctx.globalAlpha=1;
+  // horizon glow
+  ctx.fillStyle='rgba(255,100,0,0.15)'; ctx.fillRect(0,180,W,30);
+  // road
+  ctx.fillStyle='#333'; ctx.fillRect(0,200,W,300);
+  // road lines
+  for(let lx=(-scroll)%200;lx<W;lx+=200){ ctx.fillStyle='#FFD700'; ctx.globalAlpha=0.6; ctx.fillRect(lx,248,100,5); ctx.fillRect(lx,352,100,5); }
+  ctx.globalAlpha=1;
+  // lane dividers
+  for(let lx=(-scroll)%120;lx<W;lx+=120){ ctx.fillStyle='rgba(255,255,255,0.3)'; ctx.fillRect(lx,295,60,4); }
+  // side strips
+  ctx.fillStyle='#aaa'; ctx.fillRect(0,200,10,300); ctx.fillRect(W-10,200,10,300);
+
+  // Progress bar
+  const prog=Math.min(rideState.distance/rideState.maxDistance,1);
+  ctx.fillStyle='#222'; ctx.fillRect(0,0,W,8);
+  ctx.fillStyle='#00FF00'; ctx.fillRect(0,0,W*prog,8);
+  drawText('OHIO: '+(Math.round(prog*100))+'%',W-100,20,5,'#00FF00');
+  drawText('AURA: +'+rideState.score,10,20,5,'#FFD700');
+
+  // move player lane
+  rideState.laneY+=(rideState.targetLaneY-rideState.laneY)*0.18*dt;
+
+  // Input
+  if(!laneTransition){
+    if((keys['ArrowLeft']||keys['KeyA'])&&rideState.lane>0){
+      rideState.lane--; rideState.targetLaneY=LANE_Y[rideState.lane]; laneTransition=true;
+      setTimeout(()=>laneTransition=false,300);
+    } else if((keys['ArrowRight']||keys['KeyD'])&&rideState.lane<2){
+      rideState.lane++; rideState.targetLaneY=LANE_Y[rideState.lane]; laneTransition=true;
+      setTimeout(()=>laneTransition=false,300);
+    }
+  }
+
+  // Spawn obstacles
+  rideState.spawnTimer-=dt;
+  if(rideState.spawnTimer<=0){
+    rideState.spawnTimer=50+Math.random()*80;
+    const ob=OBSTACLES[Math.floor(Math.random()*OBSTACLES.length)];
+    if(ob.lanes===3){
+      rideState.obstacles.push({...ob,x:W+50,y:LANE_Y[1],laneStart:0,laneEnd:2});
+    } else {
+      const randLane=Math.floor(Math.random()*3);
+      rideState.obstacles.push({...ob,x:W+50,y:LANE_Y[randLane],lane:randLane,laneStart:randLane,laneEnd:randLane});
+    }
+  }
+
+  // Update obstacles
+  rideState.distance+=rideState.speed*dt;
+  rideState.obstacles.forEach(ob=>{
+    ob.x-=rideState.speed*dt*3;
+  });
+
+  // Draw obstacles
+  rideState.obstacles.forEach(ob=>{
+    const isWide=ob.laneEnd>ob.laneStart;
+    const topY=LANE_Y[ob.laneStart]-40, botY=LANE_Y[ob.laneEnd]+40;
+    const obH=botY-topY+30;
+    ctx.fillStyle=ob.color; ctx.globalAlpha=0.85;
+    ctx.fillRect(px(ob.x-ob.width/2),topY,ob.width,obH);
+    ctx.globalAlpha=1;
+    ctx.strokeStyle='#fff'; ctx.lineWidth=2;
+    ctx.strokeRect(px(ob.x-ob.width/2),topY,ob.width,obH);
+    drawText(ob.emoji,ob.x,ob.y-20,isWide?22:16,'#fff','center');
+    drawText(ob.label,ob.x,topY-6,4,'#fff','center');
+  });
+
+  // Draw motorcycle + player + girl
+  const mx=200, my=rideState.laneY;
+  // motion blur
+  ctx.fillStyle='rgba(50,50,200,0.15)'; ctx.fillRect(mx-80,my-30,80,50);
+  drawMotorcycle(mx,my,laneTransition?(rideState.targetLaneY-LANE_Y[1])*0.3:0);
+  drawPixelChar(mx-8,my-60,'#ffcc99','#2244aa',1,Math.floor(rideAnimT*.15)%4,false,true);
+  drawGirlRider(mx+15,my-55);
+  // exhaust
+  for(let i=0;i<5;i++){
+    ctx.fillStyle=`rgba(200,200,200,${0.1-i*0.015})`; ctx.beginPath();
+    ctx.arc(mx-60-i*12,my+8,8+i*3,0,Math.PI*2); ctx.fill();
+  }
+
+  // Collision detection
+  const playerHitbox={x:mx-30,y:rideState.laneY-60,w:60,h:80};
+  rideState.obstacles.forEach(ob=>{
+    if(ob.x<-ob.width) return;
+    const inLane=rideState.lane>=ob.laneStart&&rideState.lane<=ob.laneEnd;
+    if(inLane&&ob.x<playerHitbox.x+playerHitbox.w+30&&ob.x>playerHitbox.x-30){
+      // collision!
+      if(!ob.hit){
+        ob.hit=true;
+        const prev=aura;
+        aura=Math.max(0,Math.floor(aura/2));
+        document.getElementById('aura-val').textContent=aura;
+        const el=document.getElementById('aura-change');
+        el.textContent='CRASH! AURA HALVED: '+prev+'→'+aura;
+        el.style.color='#FF4444'; el.style.opacity=1;
+        setTimeout(()=>el.style.opacity=0,2500);
+        rideState.crashed=true;
+        setTimeout(()=>{ gameState='l3p3_gameover'; clearOverlay(); hideControlsHint(); },1200);
+      }
+    }
+    // dodged
+    if(!ob.hit&&!ob.passed&&ob.x<mx-60){
+      ob.passed=true; rideState.score++; updateAura(1,'dodged!');
+    }
+  });
+  rideState.obstacles=rideState.obstacles.filter(ob=>ob.x>-200);
+
+  if(rideState.crashed){
+    ctx.fillStyle='rgba(255,0,0,0.3)'; ctx.fillRect(0,0,W,H);
+    drawText('CRASH!!!',W/2,250,24,'#FF4444','center');
+  }
+
+  // Reached Ohio!
+  if(rideState.distance>=rideState.maxDistance&&!rideState.crashed){
+    rideState.distance=rideState.maxDistance;
+    drawOhioSign();
+    if(!rideState.ohioTriggered){
+      rideState.ohioTriggered=true;
+      updateAura(100,'WELCOME TO OHIO!');
+      setTimeout(()=>startL3Ending(),3000);
+    }
+  }
+}
+
+function drawOhioSign(){
+  // giant welcome sign
+  ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(0,0,W,H);
+  // sign
+  ctx.fillStyle='#003087'; ctx.fillRect(160,80,480,220);
+  ctx.strokeStyle='#FFD700'; ctx.lineWidth=5; ctx.strokeRect(160,80,480,220);
+  ctx.fillStyle='#FFD700'; [[160,80],[636,80],[160,296],[636,296]].forEach(([x,y])=>ctx.fillRect(x-8,y-8,20,20));
+  drawText('WELCOME TO',W/2,148,11,'#FFD700','center');
+  drawText('OHIO',W/2,195,22,'#fff','center');
+  drawText('+ 100 AURA 🏆',W/2,240,7,'#00FF00','center');
+  drawText('Population: ????',W/2,275,6,'#ccc','center');
+}
+
+// LEVEL 3 ENDING
+let l3EndT=0;
+function startL3Ending(){
+  gameState='l3_ending';
+  l3EndT=0;
+  clearOverlay(); hideLevelBanner(); hideControlsHint();
+}
+
+function drawL3Ending(){
+  l3EndT++;
+  ctx.fillStyle='#050510'; ctx.fillRect(0,0,W,H);
+  // star bg
+  for(let i=0;i<80;i++){
+    ctx.globalAlpha=0.3+0.7*Math.abs(Math.sin(l3EndT*.02+i*.4));
+    ctx.fillStyle='#FFD700';
+    ctx.fillRect((i*137+l3EndT*.3)%W,(i*89+l3EndT*.15)%H,1+(i%4===0?1:0),1+(i%4===0?1:0));
+  }
+  ctx.globalAlpha=1;
+  // end box
+  ctx.fillStyle='rgba(0,0,0,0.9)'; ctx.fillRect(80,60,640,360);
+  ctx.strokeStyle='#FFD700'; ctx.lineWidth=4; ctx.strokeRect(80,60,640,360);
+  [[80,60],[716,60],[80,416],[716,416]].forEach(([x,y])=>{ctx.fillStyle='#FFD700';ctx.fillRect(x-8,y-8,20,20);});
+
+  drawText('LEVEL THREE',W/2,108,10,'#FFD700','center');
+  drawText('COMPLETE!',W/2,140,10,'#FFD700','center');
+
+  // line separator
+  ctx.fillStyle='#FFD700'; ctx.fillRect(100,158,600,3);
+
+  drawText('PART 1: HACKY SACK',W/2,185,6,'#00ffff','center');
+  drawText('✓ TACO BELL CONQUERED',W/2,210,6,'#00ffff','center');
+  drawText('✓ OHIO REACHED',W/2,235,6,'#00ffff','center');
+
+  ctx.fillStyle='#FFD700'; ctx.fillRect(100,255,600,3);
+
+  drawText('FINAL AURA: '+aura,W/2,288,11,'#00FF00','center');
+
+  // "Level 4 Coming Soon" pulsing
+  const pa=0.5+0.5*Math.sin(l3EndT*.08);
+  ctx.fillStyle=`rgba(255,100,0,${pa})`;
+  ctx.font="9px 'Press Start 2P'";
+  ctx.textAlign='center';
+  ctx.fillText('⚡ LEVEL FOUR: COMING SOON ⚡',W/2,335);
+  ctx.textAlign='left';
+
+  drawText('Made by Dwayne The Rock',W/2,380,5,'#555','center');
+}
+
+// =============================================
+// BGM / AUDIO (beep tones, no files needed)
+// =============================================
+let bgmCtx=null, bgmOsc=null, bgmInterval=null;
+function playBGM(track){
+  try{
+    if(!bgmCtx) bgmCtx=new(window.AudioContext||window.webkitAudioContext)();
+    if(bgmInterval){ clearInterval(bgmInterval); bgmInterval=null; }
+    if(bgmOsc){ bgmOsc.stop(); bgmOsc=null; }
+    // Lava Chicken style loop — fast energetic beeps
+    const tbNotes=[220,277,330,440,330,277,220,165];
+    // Thick of It style loop
+    const tikNotes=[294,330,392,440,392,330,294,247];
+    const notes=track==='tacobell'?tbNotes:tikNotes;
+    let ni=0;
+    bgmInterval=setInterval(()=>{
+      try{
+        const o=bgmCtx.createOscillator();
+        const g=bgmCtx.createGain();
+        o.connect(g); g.connect(bgmCtx.destination);
+        o.type='square';
+        o.frequency.value=notes[ni%notes.length];
+        g.gain.setValueAtTime(0.04,bgmCtx.currentTime);
+        g.gain.exponentialRampToValueAtTime(0.001,bgmCtx.currentTime+0.12);
+        o.start(); o.stop(bgmCtx.currentTime+0.13);
+        ni++;
+      }catch(e){}
+    },130);
+  }catch(e){}
+}
+
+// =============================================
+// START
+// =============================================
+showOverlay(''); // clear
+gameLoop(0);
+</script>
+</body>
+</html>
