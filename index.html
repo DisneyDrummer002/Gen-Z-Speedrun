@@ -2661,33 +2661,16 @@ function initChefBattle() {
         chef.x += tdx / dist * 1.2;
         chef.y += tdy / dist * 1.2;
       } else if (dist < 50) {
-        // Chef hits player
         if (Math.random() < 0.008) {
           cbState.playerHP--;
           updateHPDisplay();
-          let playerDied = false;
 
-          cbState.chefs.forEach(chef => {
-            if (chef.hp <= 0) return;
-            // ... movement code ...
-            if (dist < 50) {
-              if (Math.random() < 0.008) {
-                cbState.playerHP--;
-                updateHPDisplay();
-                if (cbState.playerHP <= 0) {
-                  playerDied = true;   // ← set flag instead of return
-                }
-              }
-            }
-            if (chef.hitFlash > 0) chef.hitFlash--;
-          });
-
-          if (playerDied) {                        // ← check after forEach
+          if (cbState.playerHP <= 0) {
             if (cbState.keyHandler) document.removeEventListener('keydown', cbState.keyHandler);
             if (cbState.keyUpHandler) document.removeEventListener('keyup', cbState.keyUpHandler);
             if (cbState.frameId) cancelAnimationFrame(cbState.frameId);
             goTo('screen-l3-cb-gameover');
-            return;                                // ← this return exits loop()
+            return;
           }
         }
       }
