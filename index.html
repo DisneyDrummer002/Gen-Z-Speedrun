@@ -498,8 +498,7 @@ function updateAura(delta, label) {
   fl.style.color = delta > 0 ? '#00ff88' : '#ff4444';
   fl.style.borderColor = delta > 0 ? '#00ff88' : '#FFD700';
   fl.style.display = 'block';
-  setTimeout(() => fl.style.display = 'none', 2500);
-
+  setTimeout(() => { goTo('screen-l3-chefbattle'); }, 1000);
   // L2 style change display
   const el = document.getElementById('l2-aura-change');
   if (el) {
