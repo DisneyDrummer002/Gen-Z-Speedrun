@@ -2665,12 +2665,29 @@ function initChefBattle() {
         if (Math.random() < 0.008) {
           cbState.playerHP--;
           updateHPDisplay();
-          if (cbState.playerHP <= 0) {
+          let playerDied = false;
+
+          cbState.chefs.forEach(chef => {
+            if (chef.hp <= 0) return;
+            // ... movement code ...
+            if (dist < 50) {
+              if (Math.random() < 0.008) {
+                cbState.playerHP--;
+                updateHPDisplay();
+                if (cbState.playerHP <= 0) {
+                  playerDied = true;   // ← set flag instead of return
+                }
+              }
+            }
+            if (chef.hitFlash > 0) chef.hitFlash--;
+          });
+
+          if (playerDied) {                        // ← check after forEach
             if (cbState.keyHandler) document.removeEventListener('keydown', cbState.keyHandler);
             if (cbState.keyUpHandler) document.removeEventListener('keyup', cbState.keyUpHandler);
             if (cbState.frameId) cancelAnimationFrame(cbState.frameId);
             goTo('screen-l3-cb-gameover');
-            return;
+            return;                                // ← this return exits loop()
           }
         }
       }
@@ -2757,7 +2774,7 @@ function initChefBattle() {
       msg.textContent = '🏆 CHEFS DEFEATED! 🏆';
       msg.style.display = 'block';
       setTimeout(() => { goTo('screen-l3-eating'); }, 2500);
-      return;
+      return;   // ← now correctly exits loop() before requestAnimationFrame
     }
 
     cbState.frameId = requestAnimationFrame(loop);
